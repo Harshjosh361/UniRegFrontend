@@ -42,9 +42,9 @@ function AdminDashboard() {
 
   useEffect(() => {
     const filtered = Array.isArray(submissions) ? submissions.filter(sub => 
-      sub.user?.studentId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      sub.usn?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      sub.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (sub.studentId?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+      (sub.usn?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+      (sub.email?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
       `${sub.firstName} ${sub.lastName}`.toLowerCase().includes(searchTerm.toLowerCase())
     ) : []
     setFilteredSubmissions(filtered)
@@ -52,9 +52,9 @@ function AdminDashboard() {
   
   const handleExport = () => {
     const csvContent = [
-      ['Student ID', 'USN', 'Name', 'Email', 'Phone', 'Scheme', 'Semester', 'Subjects', 'Address'],
+      ['Student ID', 'USN', 'Name', 'Email', 'Phone', 'Scheme', 'Semester', 'Subjects', 'Address', 'Fee Receipt Filename', 'Data Verified', 'Submitted At'],
       ...filteredSubmissions.map(sub => [
-        sub.user?.studentId || '',
+        sub.studentId || '',
         sub.usn || '',
         `${sub.firstName} ${sub.lastName}`,
         sub.email || '',
@@ -62,7 +62,10 @@ function AdminDashboard() {
         sub.scheme || '',
         sub.semester || '',
         `"${(sub.subjects || []).join('; ')}"`,
-        `"${sub.address?.street || ''}, ${sub.address?.city || ''}, ${sub.address?.state || ''} - ${sub.address?.pincode || ''}"`
+        `"${sub.address?.street || ''}, ${sub.address?.city || ''}, ${sub.address?.state || ''} - ${sub.address?.pincode || ''}"`,
+        sub.feeReceiptFilename || '',
+        sub.dataVerified ? 'Yes' : 'No',
+        sub.submittedAt ? new Date(sub.submittedAt).toLocaleString() : ''
       ])
     ].map(row => row.join(',')).join('\n')
 
@@ -86,7 +89,7 @@ function AdminDashboard() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8 flex justify-between items-center">
+        <div className="max-w-screen-xl mx-auto px-4 py-6 sm:px-6 lg:px-8 flex justify-between items-center">
           <div className="flex items-center">
             <BookOpen className="h-8 w-8 text-purple-600 mr-3" />
             <h1 className="text-2xl font-bold text-gray-800">Admin Dashboard</h1>
@@ -94,7 +97,7 @@ function AdminDashboard() {
           <div className="flex items-center space-x-4">
             <button 
               onClick={handleExport}
-              className="flex items-center text-sm bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700"
+              className="flex items-center text-sm bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 transition-colors"
             >
               <Download className="h-4 w-4 mr-1" />
               Export CSV
@@ -104,7 +107,7 @@ function AdminDashboard() {
                 localStorage.removeItem("token")
                 navigate("/admin-login")
               }}
-              className="flex items-center text-sm text-red-600 hover:text-red-800"
+              className="flex items-center text-sm text-red-600 hover:text-red-800 transition-colors"
             >
               <LogOut className="h-4 w-4 mr-1" />
               Logout
@@ -113,7 +116,7 @@ function AdminDashboard() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
+      <main className="max-w-screen-xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
           <div className="bg-white shadow rounded-lg p-6">
@@ -166,43 +169,58 @@ function AdminDashboard() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Scheme</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Submitted At</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {filteredSubmissions.length > 0 ? (
                   filteredSubmissions.map((submission) => (
-                    <tr key={submission.user?.studentId || submission._id} className="hover:bg-gray-50">
+                    <tr key={submission.dbId || submission.usn} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {submission.user?.studentId || 'N/A'}
+                        {submission.studentId || 'N/A'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-6 py-4 text-sm text-gray-500">
                         {submission.firstName} {submission.lastName}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-6 py-4 text-sm text-gray-500">
                         {submission.usn}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {submission.semester}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-500">
-                        <div className="max-w-xs">
+                        <div className="max-w-xs break-words">
                           {(submission.subjects || []).join(', ')}
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-6 py-4 text-sm text-gray-500">
                         {submission.email}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {submission.scheme}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-6 py-4 text-sm text-gray-500">
                         {new Date(submission.submittedAt).toLocaleString()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        {submission.feeReceiptFilename ? (
+                          <a
+                            href={`${import.meta.env.VITE_API_URL}/uploads/${submission.feeReceiptFilename}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-purple-600 hover:text-purple-900 hover:underline transition-colors"
+                          >
+                            View Receipt
+                          </a>
+                        ) : (
+                          <span className="text-gray-400">No Receipt</span>
+                        )}
                       </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="8" className="px-6 py-4 text-center text-sm text-gray-500">
+                    <td colSpan="9" className="px-6 py-4 text-center text-sm text-gray-500">
                       No submissions found
                     </td>
                   </tr>

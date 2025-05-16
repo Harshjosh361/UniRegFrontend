@@ -1,8 +1,19 @@
-"use client"
-
-import { useEffect, useState } from "react"
-import { useNavigate } from "react-router-dom"
-import { BookOpen, CheckCircle, LogOut, User, MapPin, Phone, Mail, BookmarkCheck, ChevronDown } from "lucide-react"
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  BookOpen,
+  CheckCircle,
+  LogOut,
+  User,
+  MapPin,
+  Phone,
+  Mail,
+  BookmarkCheck,
+  ChevronDown,
+  FileUp,
+  AlertTriangle,
+} from "lucide-react";
+import { getSubjectsForSemester } from "../utils/subjectConfig";
 
 // List of available subjects
 const SUBJECTS_LIST = [
@@ -16,117 +27,169 @@ const SUBJECTS_LIST = [
   "Machine Learning",
   "Web Development",
   "Cybersecurity",
-]
+];
+
+const initialFormData = {
+  firstName: "",
+  lastName: "",
+  usn: "",
+  email: "",
+  address: {
+    street: "",
+    city: "",
+    state: "",
+    pincode: "",
+  },
+  phone: "",
+  scheme: "2022",
+  semester: 1,
+  subjects: [],
+  feeReceipt: null,
+  dataVerified: false,
+};
 
 function StudentDashboard() {
-  const [userData, setUserData] = useState(null)
-  const [formData, setFormData] = useState({
-    firstName: "",
-    lastName: "",
-    usn: "",
-    email: "",
-    address: {
-      street: "",
-      city: "",
-      state: "",
-      pincode: "",
-    },
-    phone: "",
-    scheme: "2024",
-    semester: 1,
-    subjects: [],
-  })
-  const [isSubmitted, setIsSubmitted] = useState(false)
-  const [error, setError] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
-  const navigate = useNavigate()
+  const [userData, setUserData] = useState(null);
+  const [formData, setFormData] = useState(initialFormData);
+  const [availableSubjects, setAvailableSubjects] = useState([]);
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchUserData = async () => {
       try {
-        const token = localStorage.getItem("token")
+        const token = localStorage.getItem("token");
         if (!token) {
-          navigate("/student-login")
-          return
+          navigate("/student-login");
+          return;
         }
 
         setUserData({
           studentId: "Student",
-        })
+        });
       } catch (err) {
-        console.error("Error fetching user data:", err)
-        setError(err.message)
+        console.error("Error fetching user data:", err);
+        setError(err.message);
       }
-    }
+    };
 
-    fetchUserData()
-  }, [navigate])
+    fetchUserData();
+  }, [navigate]);
+
+  useEffect(() => {
+    const currentSemester = parseInt(formData.semester, 10);
+    const subjectsForSelectedSemester = getSubjectsForSemester(currentSemester);
+    setAvailableSubjects(subjectsForSelectedSemester);
+    setFormData((prev) => ({
+      ...prev,
+      subjects: [],
+      feeReceipt: prev.feeReceipt,
+      dataVerified: prev.dataVerified,
+    }));
+  }, [formData.semester]);
 
   const handleChange = (e) => {
-    const { name, value } = e.target
+    const { name, value, type, checked, files } = e.target;
     if (name.includes("address.")) {
-      const field = name.split(".")[1]
+      const field = name.split(".")[1];
       setFormData((prev) => ({
         ...prev,
         address: {
           ...prev.address,
           [field]: value,
         },
-      }))
+      }));
+    } else if (type === "checkbox" && name === "dataVerified") {
+      setFormData((prev) => ({ ...prev, dataVerified: checked }));
+    } else if (type === "file" && name === "feeReceipt") {
+      setFormData((prev) => ({ ...prev, feeReceipt: files[0] || null }));
     } else {
       setFormData((prev) => ({
         ...prev,
         [name]: value,
-      }))
+      }));
     }
-  }
+  };
 
   const handleCheckboxChange = (subject) => {
     setFormData((prev) => {
       const subjects = prev.subjects.includes(subject)
         ? prev.subjects.filter((s) => s !== subject)
-        : [...prev.subjects, subject]
-      return { ...prev, subjects }
-    })
-  }
+        : [...prev.subjects, subject];
+      return { ...prev, subjects };
+    });
+  };
 
   const handleSubmit = async (e) => {
-    e.preventDefault()
-    setIsLoading(true)
-    setError("")
+    e.preventDefault();
+    setError("");
 
-    // Validate at least one subject selected
     if (formData.subjects.length === 0) {
-      setError("Please select at least one subject")
-      setIsLoading(false)
-      return
+      setError("Please select at least one subject.");
+      return;
+    }
+    if (!formData.feeReceipt) {
+      setError("Please upload your fee receipt.");
+      return;
+    }
+    if (!formData.dataVerified) {
+      setError("Please verify that all the data you entered is correct.");
+      return;
+    }
+
+    setIsLoading(true);
+
+    const dataToSubmit = new FormData();
+    dataToSubmit.append("firstName", formData.firstName);
+    dataToSubmit.append("lastName", formData.lastName);
+    dataToSubmit.append("usn", formData.usn.toUpperCase());
+    dataToSubmit.append("email", formData.email.toLowerCase());
+    dataToSubmit.append("address", JSON.stringify(formData.address));
+    dataToSubmit.append("phone", formData.phone);
+    dataToSubmit.append("scheme", formData.scheme);
+    dataToSubmit.append("semester", formData.semester.toString());
+    dataToSubmit.append("subjects", JSON.stringify(formData.subjects));
+    dataToSubmit.append("dataVerified", formData.dataVerified.toString());
+
+    if (formData.feeReceipt) {
+      dataToSubmit.append(
+        "feeReceipt",
+        formData.feeReceipt,
+        formData.feeReceipt.name
+      );
     }
 
     try {
-      const token = localStorage.getItem("token")
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/form/submit`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          ...formData,
-          usn: formData.usn.toUpperCase(),
-          email: formData.email.toLowerCase(),
-        }),
-      })
+      const token = localStorage.getItem("token");
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/form/submit`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: dataToSubmit,
+        }
+      );
 
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.message)
+      const responseData = await response.json();
+      if (!response.ok) {
+        throw new Error(
+          responseData.message || "Submission failed due to server error"
+        );
+      }
 
-      setIsSubmitted(true)
+      setIsSubmitted(true);
     } catch (err) {
-      setError(err.message)
+      setError(
+        err.message || "An unexpected error occurred during submission."
+      );
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   if (!userData) {
     return (
@@ -136,7 +199,7 @@ function StudentDashboard() {
           <div className="h-4 w-24 bg-purple-200 rounded"></div>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -149,16 +212,21 @@ function StudentDashboard() {
                 <BookOpen className="h-7 w-7 text-purple-600" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-800 mb-1">Student Dashboard</h1>
+                <h1 className="text-2xl font-bold text-gray-800 mb-1">
+                  Student Dashboard
+                </h1>
                 <p className="text-gray-600">
-                  Welcome back, <span className="font-medium text-purple-700">{userData?.studentId || "Student"}</span>
+                  Welcome back,{" "}
+                  <span className="font-medium text-purple-700">
+                    {userData?.studentId || "Student"}
+                  </span>
                 </p>
               </div>
             </div>
             <button
               onClick={() => {
-                localStorage.removeItem("token")
-                navigate("/student-login")
+                localStorage.removeItem("token");
+                navigate("/student-login");
               }}
               className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 hover:text-purple-700 transition-colors duration-200"
             >
@@ -173,12 +241,21 @@ function StudentDashboard() {
             <div className="bg-green-100 p-4 rounded-full inline-flex mb-6">
               <CheckCircle className="h-12 w-12 text-green-600" />
             </div>
-            <h2 className="text-2xl font-bold mb-3 text-gray-800">Registration Successful!</h2>
+            <h2 className="text-2xl font-bold mb-3 text-gray-800">
+              Registration Successful!
+            </h2>
             <p className="text-gray-600 mb-6 max-w-md mx-auto">
-              Your details have been successfully submitted and recorded in our system.
+              Your details have been successfully submitted. Thank you!
             </p>
             <button
-              onClick={() => window.location.reload()}
+              onClick={() => {
+                setIsSubmitted(false);
+                setFormData(initialFormData);
+                const initialSubjects = getSubjectsForSemester(
+                  initialFormData.semester
+                );
+                setAvailableSubjects(initialSubjects);
+              }}
               className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors duration-200 shadow-md hover:shadow-lg"
             >
               Submit Another Form
@@ -190,21 +267,15 @@ function StudentDashboard() {
               <div className="bg-purple-100 p-2 rounded-lg mr-4">
                 <User className="h-5 w-5 text-purple-600" />
               </div>
-              <h2 className="text-xl font-bold text-gray-800">Student Registration Form</h2>
+              <h2 className="text-xl font-bold text-gray-800">
+                Student Registration Form
+              </h2>
             </div>
 
             {error && (
-              <div className="bg-red-50 border-l-4 border-red-500 text-red-700 p-4 rounded-lg mb-6 animate-fadeIn">
-                <div className="flex items-center">
-                  <svg className="h-5 w-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                    <path
-                      fillRule="evenodd"
-                      d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                  {error}
-                </div>
+              <div className="bg-red-50 border-l-4 border-red-500 text-red-700 p-4 rounded-lg mb-6 animate-fadeIn flex items-center">
+                <AlertTriangle className="h-5 w-5 mr-2 text-red-600" />
+                <span>{error}</span>
               </div>
             )}
 
@@ -215,7 +286,9 @@ function StudentDashboard() {
                   <div className="bg-purple-100 p-2 rounded-lg mr-3">
                     <User className="h-4 w-4 text-purple-600" />
                   </div>
-                  <h3 className="text-lg font-medium text-gray-800">Personal Information</h3>
+                  <h3 className="text-lg font-medium text-gray-800">
+                    Personal Information
+                  </h3>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
@@ -261,7 +334,9 @@ function StudentDashboard() {
                       pattern="[A-Za-z0-9]{10}"
                       title="10 character alphanumeric USN"
                     />
-                    <p className="text-xs text-gray-500">10 character alphanumeric ID</p>
+                    <p className="text-xs text-gray-500">
+                      10 character alphanumeric ID
+                    </p>
                   </div>
 
                   <div className="space-y-2">
@@ -302,7 +377,9 @@ function StudentDashboard() {
                         title="10 digit phone number"
                       />
                     </div>
-                    <p className="text-xs text-gray-500">10 digit phone number</p>
+                    <p className="text-xs text-gray-500">
+                      10 digit phone number
+                    </p>
                   </div>
 
                   <div className="space-y-2">
@@ -310,22 +387,13 @@ function StudentDashboard() {
                       Scheme Year <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
-                      <select
+                      <input
+                        type="text"
                         name="scheme"
                         value={formData.scheme}
-                        onChange={handleChange}
-                        className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200 appearance-none"
-                        required
-                      >
-                        <option value="2020">2020</option>
-                        <option value="2021">2021</option>
-                        <option value="2022">2022</option>
-                        <option value="2023">2023</option>
-                        <option value="2024">2024</option>
-                      </select>
-                      <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                        <ChevronDown className="h-4 w-4 text-gray-400" />
-                      </div>
+                        readOnly
+                        className="w-full px-4 py-2.5 rounded-lg border border-gray-300 bg-gray-100 focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
+                      />
                     </div>
                   </div>
 
@@ -366,31 +434,44 @@ function StudentDashboard() {
                   </h3>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {SUBJECTS_LIST.map((subject) => (
-                    <label
-                      key={subject}
-                      className={`flex items-center p-3 rounded-lg border-2 transition-all duration-200 cursor-pointer ${
-                        formData.subjects.includes(subject)
-                          ? "border-purple-500 bg-purple-50"
-                          : "border-gray-200 hover:border-gray-300"
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={formData.subjects.includes(subject)}
-                        onChange={() => handleCheckboxChange(subject)}
-                        className="form-checkbox h-5 w-5 text-purple-600 rounded focus:ring-purple-500 transition-all duration-200"
-                      />
-                      <span
-                        className={`ml-3 ${formData.subjects.includes(subject) ? "font-medium text-purple-800" : "text-gray-700"}`}
+                {availableSubjects.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {availableSubjects.map((subject) => (
+                      <label
+                        key={subject}
+                        className={`flex items-center p-3 rounded-lg border-2 transition-all duration-200 cursor-pointer ${
+                          formData.subjects.includes(subject)
+                            ? "border-purple-500 bg-purple-50 shadow-sm"
+                            : "border-gray-200 hover:border-gray-300 bg-white"
+                        }`}
                       >
-                        {subject}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-                <p className="text-xs text-gray-500 mt-3">Select at least one subject</p>
+                        <input
+                          type="checkbox"
+                          checked={formData.subjects.includes(subject)}
+                          onChange={() => handleCheckboxChange(subject)}
+                          className="form-checkbox h-5 w-5 text-purple-600 rounded focus:ring-2 focus:ring-purple-500 focus:ring-offset-1 focus:ring-offset-white transition-all duration-200"
+                        />
+                        <span
+                          className={`ml-3 text-sm ${
+                            formData.subjects.includes(subject)
+                              ? "font-medium text-purple-800"
+                              : "text-gray-700"
+                          }`}
+                        >
+                          {subject}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-gray-600 text-center py-4">
+                    No subjects available for the selected semester. Please
+                    select a valid semester.
+                  </p>
+                )}
+                <p className="text-xs text-gray-500 mt-3">
+                  Select at least one subject from the list above.
+                </p>
               </div>
 
               {/* Address Section */}
@@ -399,7 +480,9 @@ function StudentDashboard() {
                   <div className="bg-purple-100 p-2 rounded-lg mr-3">
                     <MapPin className="h-4 w-4 text-purple-600" />
                   </div>
-                  <h3 className="text-lg font-medium text-gray-800">Address Information</h3>
+                  <h3 className="text-lg font-medium text-gray-800">
+                    Address Information
+                  </h3>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
@@ -464,12 +547,76 @@ function StudentDashboard() {
                 </div>
               </div>
 
+              {/* Fee Receipt Upload Section */}
+              <div className="bg-gray-50 p-6 rounded-xl">
+                <div className="flex items-center mb-6">
+                  <div className="bg-purple-100 p-2 rounded-lg mr-3">
+                    <FileUp className="h-4 w-4 text-purple-600" />
+                  </div>
+                  <h3 className="text-lg font-medium text-gray-800">
+                    Upload Fee Receipt <span className="text-red-500">*</span>
+                  </h3>
+                </div>
+                <div className="space-y-2">
+                  <label
+                    htmlFor="feeReceipt"
+                    className="block text-sm font-medium text-gray-700"
+                  >
+                    Select receipt file (PDF, JPG, PNG)
+                  </label>
+                  <input
+                    type="file"
+                    name="feeReceipt"
+                    id="feeReceipt"
+                    onChange={handleChange}
+                    className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 transition-colors duration-200 cursor-pointer border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                  />
+                  {formData.feeReceipt && (
+                    <p className="text-xs text-green-600 mt-1">
+                      Selected: {formData.feeReceipt.name}
+                    </p>
+                  )}
+                  <p className="text-xs text-gray-500 mt-1">
+                    Max file size: 5MB. Accepted formats: PDF, JPG, PNG.
+                  </p>
+                </div>
+              </div>
+
+              {/* Data Verification Checkbox */}
+              <div className="bg-gray-50 p-6 rounded-xl">
+                <label className="flex items-center space-x-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="dataVerified"
+                    checked={formData.dataVerified}
+                    onChange={handleChange}
+                    className="form-checkbox h-5 w-5 text-purple-600 rounded focus:ring-2 focus:ring-purple-500 transition-all duration-200"
+                  />
+                  <span className="text-sm font-medium text-gray-700">
+                    I hereby declare that all the information provided above is
+                    correct to the best of my knowledge.{" "}
+                    <span className="text-red-500">*</span>
+                  </span>
+                </label>
+              </div>
+
               <div className="flex justify-end pt-4">
                 <button
                   type="submit"
-                  disabled={isLoading}
+                  disabled={
+                    isLoading ||
+                    !formData.dataVerified ||
+                    !formData.feeReceipt ||
+                    formData.subjects.length === 0
+                  }
                   className={`px-6 py-3 bg-purple-600 text-white rounded-lg shadow-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all duration-200 ${
-                    isLoading ? "opacity-70 cursor-not-allowed" : "hover:shadow-lg"
+                    isLoading ||
+                    !formData.dataVerified ||
+                    !formData.feeReceipt ||
+                    formData.subjects.length === 0
+                      ? "opacity-70 cursor-not-allowed"
+                      : "hover:shadow-lg"
                   }`}
                 >
                   {isLoading ? (
@@ -506,7 +653,7 @@ function StudentDashboard() {
         )}
       </div>
     </div>
-  )
+  );
 }
 
-export default StudentDashboard
+export default StudentDashboard;
